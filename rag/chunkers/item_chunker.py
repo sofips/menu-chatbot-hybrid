@@ -41,8 +41,7 @@ class ItemChunker(BaseChunker):
         else:
             price_text = "Price information is not available."
 
-        return dedent(
-            f"""{name} is a menu item in the category: {categories}.
+        return dedent(f"""{name} is a menu item in the category: {categories}.
             {price_text}
             """
         ).strip()

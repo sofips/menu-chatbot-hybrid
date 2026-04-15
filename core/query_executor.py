@@ -5,7 +5,7 @@ class QueryExecutor:
     def __init__(self, parser):
         self.parser = parser
 
-    def execute(self, query: dict) -> str:
+    def execute(self, query: dict) -> str | None:
         intent = query.get("intent")
 
         if intent == "item_price":
@@ -86,20 +86,17 @@ class QueryExecutor:
         if not result["success"]:
             return None  # Fallback to RAG
 
-        nutrition = result["data"].get("nutrition", {})
-        calories = nutrition.get("calories")
-        
         item = result["data"]
-        category = item["categories"][0].lower()
+        nutrition = item.get("nutrition", {})
+        calories = nutrition.get("calories")
 
+        categories = item.get("categories") or ["item"]
+        category = categories[0].replace("_", " ").lower().strip()
         if category.endswith("s"):
             category = category[:-1]
-               
 
         if calories:
-            return  f"""
-                The item "{item["name"]}" is a {category}.
-                It has {nutrition.get("calories")} calories."""
+            return f"{item['name']} is a {category} with {calories} calories."
         
         if not calories:
             return None  # Fallback to RAG for items without nutritional data

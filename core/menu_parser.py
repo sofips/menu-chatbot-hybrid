@@ -316,3 +316,55 @@ class MenuParser:
             },
             "error": None,
         }
+
+    def get_discounts_with_coupons(self):
+        discounts = []
+
+        for discount in self.discounts_by_id.values():
+            title = (discount.get("checkTitle") or "").strip()
+            coupon = (discount.get("couponCode") or "").strip()
+
+            if not title or not coupon:
+                continue
+
+            if coupon.lower() == "openamount":
+                continue
+
+            discounts.append(
+                {
+                    "id": discount.get("id"),
+                    "title": title,
+                    "code": coupon,
+                }
+            )
+
+        return sorted(discounts, key=lambda d: d["title"].lower())
+
+    def get_active_discounts(self):
+        discounts = []
+
+        for discount in self.discounts_by_id.values():
+            if discount.get("deleted"):
+                continue
+
+            title = (discount.get("checkTitle") or "").strip()
+            if not title:
+                continue
+
+            if any(x in title.lower() for x in ["open discount", "loyalty discount"]):
+                continue
+
+            item = {
+                "id": discount.get("id"),
+                "title": title,
+            }
+
+            if discount.get("amount") is not None:
+                item["amount"] = discount.get("amount")
+
+            if discount.get("percentage") is not None:
+                item["percentage"] = discount.get("percentage")
+
+            discounts.append(item)
+
+        return sorted(discounts, key=lambda d: (d.get("title") or "").lower())

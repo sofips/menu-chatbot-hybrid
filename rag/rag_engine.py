@@ -1,3 +1,6 @@
+import re
+
+
 class RAGEngine:
     def __init__(self, embedding_model, vector_store, llm_client, query_executor=None):
         self.embedding_model = embedding_model
@@ -7,6 +10,11 @@ class RAGEngine:
 
     def run(self, query, k=10, history=None):
         normalized_query = query.lower()
+
+        if self.executor and self._looks_structured_query(normalized_query):
+            structured = self._try_structured_simple(query)
+            if structured:
+                return structured
 
         filter_type = None
 
@@ -45,34 +53,79 @@ class RAGEngine:
 
         response = self.llm.generate(prompt)
 
-        return response.strip()
+        return self._clean_response(response)
+
+    def _clean_response(self, response):
+        lines = [line.strip() for line in response.splitlines()]
+        lines = [line for line in lines if line]
+        return "\n".join(lines).strip()
+
+    def _looks_structured_query(self, normalized_query):
+        structured_terms = [
+            "price",
+            "cost",
+            "how much",
+            "calorie",
+            "coupon",
+            "code",
+            "active discount",
+            "discount today",
+            "today",
+            "channel",
+        ]
+        return any(term in normalized_query for term in structured_terms)
 
     def _try_structured_simple(self, query):
+        if not self.executor:
+            return None
+
         q = query.lower()
+
+        if "channel" in q and any(w in q for w in ["price", "cost", "how much"]):
+            return "I only have one menu snapshot and cannot compare prices across channels."
 
         # PRICE
         if any(w in q for w in ["price", "cost", "how much"]):
-            item = self._extract_item_name(query)
+            item = self._find_item_in_query(q) or self._extract_item_name(query)
             size = self._extract_size(query)
 
             if item:
-                return self.executor.execute({
+                result = self.executor.execute({
                     "intent": "item_price",
                     "item_name": item,
                     "size": size,
                     "category": None,
                 })
+                if result:
+                    return result
+                return f"I couldn't find '{item}'. Please use the exact menu item name."
+
+            if "smoothie" in q:
+                examples = self._get_category_examples("smoothies")
+                if examples:
+                    size_hint = f" with size '{size}'" if size else ""
+                    return (
+                        f"Please specify the smoothie name{size_hint}. "
+                        f"Examples: {', '.join(examples)}."
+                    )
+
+            return "Please specify the exact menu item name for a price lookup."
 
         # CALORIES
         if "calorie" in q:
-            item = self._extract_item_name(query)
+            item = self._find_item_in_query(q) or self._extract_item_name(query)
             if item:
-                return self.executor.execute({
+                result = self.executor.execute({
                     "intent": "item_nutrition",
                     "item_name": item,
                     "size": None,
                     "category": None,
                 })
+                if result:
+                    return result
+                return f"I couldn't find nutrition data for '{item}'."
+
+            return "Please specify the exact menu item name for a calorie lookup."
 
         # COUPONS
         if "coupon" in q or "code" in q:
@@ -95,11 +148,15 @@ class RAGEngine:
         return None
 
     def _extract_item_name(self, query):
-        q = query.lower()
+        q = query.lower().replace("’", "'")
 
         patterns = [
             "how many calories does the ",
             "how many calories in ",
+            "what's the price of ",
+            "whats the price of ",
+            "what's the cost of ",
+            "whats the cost of ",
             "what is the price of ",
             "how much is ",
             "how much for ",
@@ -112,18 +169,33 @@ class RAGEngine:
                 q = q.replace(pattern, "", 1)
                 break
 
-        for article in ["the ", "a "]:
-            if q.startswith(article):
-                q = q[len(article):]
+        q = q.replace("?", " ").replace("-", " ")
 
-        for size in ["small", "medium", "large", "sm", "md", "lg"]:
-            q = q.replace(f"{size} ", "")
+        tokens = [t for t in re.split(r"\s+", q.strip()) if t]
 
-        for item_type in ["smoothie", "salad", "wrap", "toast", "sandwich"]:
-            if q.endswith(f" {item_type}"):
-                q = q[:-len(item_type)-1]
+        stopwords = {
+            "what",
+            "what's",
+            "whats",
+            "is",
+            "the",
+            "a",
+            "an",
+            "of",
+            "for",
+            "price",
+            "cost",
+            "much",
+            "how",
+        }
 
-        return q.strip().rstrip("?")
+        sizes = {"small", "medium", "large", "sm", "md", "lg"}
+        tokens = [t for t in tokens if t not in stopwords and t not in sizes]
+
+        if tokens and tokens[-1] in {"smoothie", "salad", "wrap", "toast", "sandwich"}:
+            tokens = tokens[:-1]
+
+        return " ".join(tokens).strip()
 
     def _extract_size(self, query):
         q = query.lower()
@@ -131,6 +203,39 @@ class RAGEngine:
             if size in q:
                 return size
         return None
+
+    def _find_item_in_query(self, normalized_query):
+        if not self.executor or not getattr(self.executor, "parser", None):
+            return None
+
+        names = sorted(self.executor.parser.items_by_name.keys(), key=len, reverse=True)
+        for name in names:
+            if name and name in normalized_query:
+                return name
+        return None
+
+    def _get_category_examples(self, category_key, max_items=5):
+        if not self.executor or not getattr(self.executor, "parser", None):
+            return []
+
+        parser = self.executor.parser
+        keys = parser.items_by_category.get(category_key, [])
+
+        examples = []
+        seen = set()
+        for key in keys:
+            item = parser.items_by_name.get(key)
+            if not item:
+                continue
+            name = item.get("name")
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            examples.append(name)
+            if len(examples) >= max_items:
+                break
+
+        return examples
 
     def _build_prompt(self, context, query, history=None):
         history_text = ""
@@ -144,6 +249,9 @@ class RAGEngine:
 You are a friendly menu assistant.
 
 Answer naturally, clearly, and concisely.
+Paraphrase context into natural language instead of copying chunk text verbatim.
+Do not output raw chunk labels like "Entity:", "Category:", or "Discount:" unless asked.
+If an item has price zero or $0.00, say it is not available.
 
 Use the provided menu information as your main source.
 Take typos and pluralization into account, 
@@ -157,9 +265,15 @@ When answering about discounts:
 - If asked about coupons, include ALL discounts that explicitly 
 say they REQUIRE a coupon code but do not specify the required coupon code.
 
+Only use facts explicitly present in the provided menu information.
+
 If information is partially available, use what is present.
 
-If the information is not available at all, say so briefly.
+If the information is not available at all, say so briefly and suggest checking
+with staff.
+
+Do not infer ingredients, protein content, dietary labels, channel-level pricing,
+or ranking answers (like cheapest item) unless they are explicitly present.
 
 Keep the tone friendly and direct. Avoid unnecessary explanations. 
 Do not say according to the menu, just provide the answer. 
