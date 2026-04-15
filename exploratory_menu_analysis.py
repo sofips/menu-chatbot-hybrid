@@ -20,7 +20,7 @@ def print_section(title: str) -> None:
 
 
 def build_parser() -> MenuParser:
-    data_path = Path(__file__).with_name("MenuDataTest.json")
+    data_path = Path(__file__).parent / "data" / "MenuDataTest.json"
     return MenuParser(str(data_path))
 
 
@@ -47,6 +47,7 @@ def analyze_price_coverage(parser: MenuParser):
     all_prices = []
     single_price_items = []
     multi_price_items = []
+    zero_price_items = []
 
     for name, item in parser.items_by_name.items():
         values = item["prices"]["values"]
@@ -55,6 +56,8 @@ def analyze_price_coverage(parser: MenuParser):
             single_price_items.append(name)
         elif len(values) > 1:
             multi_price_items.append(name)
+        if any(p <= 0 for p in values.values()):
+            zero_price_items.append(name)
 
     if all_prices:
         print(f"Price range: ${min(all_prices):.2f} - ${max(all_prices):.2f}")
@@ -63,10 +66,16 @@ def analyze_price_coverage(parser: MenuParser):
 
     zero_prices = [price for price in all_prices if price <= 0]
     print(f"Zero/negative prices: {len(zero_prices)}")
+    if zero_price_items:
+        print("  WARNING: Items with zero/negative prices should be reviewed.")
+        print("  They may need to be updated or removed from the menu.")
+        print(f"  Items: {zero_price_items}")
     print(f"Single-price items: {len(single_price_items)}")
     print(f"Multi-price items: {len(multi_price_items)}")
     print(f"  Examples single: {single_price_items[:3]}")
     print(f"  Examples multi: {multi_price_items[:3]}")
+
+
 
     return multi_price_items
 
@@ -207,7 +216,7 @@ def print_summary(parser: MenuParser, multi_price_items) -> None:
     print(f"Multi-price items: {len(multi_price_items)}")
 
 
-def main() -> None:
+def run_exploratory_analysis() -> None:
     parser = build_parser()
     analyze_inventory(parser)
     multi_price_items = analyze_price_coverage(parser)
@@ -218,5 +227,3 @@ def main() -> None:
     print_summary(parser, multi_price_items)
 
 
-if __name__ == "__main__":
-    main()

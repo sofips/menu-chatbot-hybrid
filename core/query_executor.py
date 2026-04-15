@@ -88,15 +88,24 @@ class QueryExecutor:
 
         nutrition = result["data"].get("nutrition", {})
         calories = nutrition.get("calories")
+        
+        item = result["data"]
+        category = item["categories"][0].lower()
+
+        if category.endswith("s"):
+            category = category[:-1]
+               
 
         if calories:
-            item_name = result['data']['name']
-            return f"{item_name} has {calories} calories"
+            return  f"""
+                The item "{item["name"]}" is a {category}.
+                It has {nutrition.get("calories")} calories."""
         
         if not calories:
             return None  # Fallback to RAG for items without nutritional data
         
         return None
+
     
     def _handle_category(self, query):
         category = query.get("category")

@@ -35,17 +35,14 @@ class ItemChunker(BaseChunker):
             price_lines = "\n".join(
                 [f"- {size.capitalize()}: ${value:.2f}" for size, value in prices.items()]
             )
-            price_text = f"""
-    The item "{name}" has the following prices:
+            price_text = f"""The item "{name}" has the following prices:
     {price_lines}
     """
         else:
             price_text = "Price information is not available."
 
         return dedent(
-            f"""
-            {name} is a menu item in the category: {categories}.
-
+            f"""{name} is a menu item in the category: {categories}.
             {price_text}
             """
         ).strip()
