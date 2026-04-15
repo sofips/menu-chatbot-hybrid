@@ -21,7 +21,7 @@ The chatbot will retrieve the relevant information and respond in natural langua
 
 ---
 
-## How it works (high level)
+## How it works
 
 1. The menu JSON is parsed into structured data
 2. That data is turned into small text chunks by four specialized chunkers:
