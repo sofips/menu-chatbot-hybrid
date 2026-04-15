@@ -1,0 +1,40 @@
+CHALLENGE QUESTIONS TEST RESULTS
+======================================================================
+
+Q1: What is the price of a small NUTTY BOWL?
+----------------------------------------------------------------------
+A: $11.99
+
+Q2: How many calories does the GO GREEN smoothie have?
+----------------------------------------------------------------------
+A: 240 calories.
+
+Q3: Which salads do you have?
+----------------------------------------------------------------------
+A: We have the Supergreen Goddess Salad, MIGHTY MED SALAD, Green Glow Bowl, Power Pesto Chicken Bowl, and Chimichurri Steak & Pot Bowl.
+
+Q4: What discounts are available today?
+----------------------------------------------------------------------
+A: Today, we have the following discounts:
+
+* Veteran Day Smoothie (100% off)
+* $1 OFF any Bowl or Smoothie ($1 off)
+* BOGO Any Smoothie (Buy one get one offer)
+* Military/Police Discount (20% off) - REQUIRES coupon code: Military
+* $3.00 Off LG Bowl ($3 off) - REQUIRES coupon code: 1000
+
+Q5: Which discounts include coupons?
+----------------------------------------------------------------------
+A: We have the following discounts that require a coupon code:
+
+* Military/Police Discount (REQUIRES coupon code: Military)
+* $3.00 Off LG Bowl (REQUIRES coupon code: 1000)
+
+Q6: What items trigger a BOGO Any Smoothie discount?
+----------------------------------------------------------------------
+A: Any Smoothies!
+
+Q7: Is the price for Smoothie - ACAI ELIXIR the same in all channels?
+----------------------------------------------------------------------
+A: Yes, the price for the ACAI ELIXIR smoothie is $8.49 across all channels.
+
