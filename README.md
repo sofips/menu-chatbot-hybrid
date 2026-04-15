@@ -63,8 +63,3 @@ Prerequisites:
 ```bash
 python3 main.py
 ```
-
-To run challenge tests:
-
-```bash
-python3 tests/test_challenge.py
