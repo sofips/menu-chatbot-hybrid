@@ -1,4 +1,5 @@
 import re
+from difflib import get_close_matches
 
 
 class RAGEngine:
@@ -9,10 +10,11 @@ class RAGEngine:
         self.executor = query_executor
 
     def run(self, query, k=10, history=None):
-        normalized_query = query.lower()
+        effective_query = self._normalize_query_with_fuzzy_item(query)
+        normalized_query = effective_query.lower()
 
         if self.executor and self._looks_structured_query(normalized_query):
-            structured = self._try_structured_simple(query)
+            structured = self._try_structured_simple(effective_query)
             if structured:
                 return structured
 
@@ -49,11 +51,75 @@ class RAGEngine:
 
         context = "\n\n".join(documents)
 
-        prompt = self._build_prompt(context, query, history)
+        prompt = self._build_prompt(context, effective_query, history)
 
         response = self.llm.generate(prompt)
 
         return self._clean_response(response)
+
+    def _normalize_query_with_fuzzy_item(self, query):
+        if not self.executor or not getattr(self.executor, "parser", None):
+            return query
+
+        # If an exact item already appears in the query, keep it unchanged.
+        if self._find_item_in_query(query.lower()):
+            return query
+
+        candidate = self._extract_freeform_item_candidate(query)
+        if not candidate:
+            return query
+
+        matched = self._fuzzy_item_name(candidate)
+        if not matched:
+            return query
+
+        return f"{query} (item: {matched})"
+
+    def _extract_freeform_item_candidate(self, query):
+        q = query.lower().replace("’", "'")
+
+        patterns = [
+            "tell me about ",
+            "details about ",
+            "information about ",
+            "info about ",
+            "what's in ",
+            "what is in ",
+            "what is ",
+            "describe ",
+        ]
+
+        for pattern in patterns:
+            if pattern in q:
+                q = q.split(pattern, 1)[1]
+                break
+        else:
+            return None
+
+        q = q.strip().rstrip("?.!")
+        for prefix in ["the ", "a ", "an "]:
+            if q.startswith(prefix):
+                q = q[len(prefix):]
+
+        return q.strip() or None
+
+    def _fuzzy_item_name(self, candidate):
+        if not self.executor or not getattr(self.executor, "parser", None):
+            return None
+
+        normalized = re.sub(r"\s+", " ", (candidate or "").lower().strip())
+        if not normalized:
+            return None
+
+        names = list(self.executor.parser.items_by_name.keys())
+        if normalized in names:
+            return normalized
+
+        match = get_close_matches(normalized, names, n=1, cutoff=0.65)
+        if match:
+            return match[0]
+
+        return None
 
     def _clean_response(self, response):
         lines = [line.strip() for line in response.splitlines()]
@@ -152,6 +218,7 @@ class RAGEngine:
 
         patterns = [
             "how many calories does the ",
+            "how many calories does ",
             "how many calories in ",
             "what's the price of ",
             "whats the price of ",
@@ -178,13 +245,19 @@ class RAGEngine:
             "what's",
             "whats",
             "is",
+            "does",
+            "have",
             "the",
             "a",
             "an",
             "of",
+            "in",
             "for",
             "price",
             "cost",
+            "calorie",
+            "calories",
+            "many",
             "much",
             "how",
         }
@@ -251,7 +324,8 @@ You are a friendly menu assistant.
 Answer naturally, clearly, and concisely.
 Paraphrase context into natural language instead of copying chunk text verbatim.
 Do not output raw chunk labels like "Entity:", "Category:", or "Discount:" unless asked.
-If an item has price zero or $0.00, say it is not available.
+If any price is 0.00 state that it's probably a data base issue 
+and suggest checking with staff.
 
 Use the provided menu information as your main source.
 Take typos and pluralization into account, 
